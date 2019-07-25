@@ -39,7 +39,7 @@ parser.add_argument("input_files", nargs='+',
                     help="can be any video files that ffmpeg accepts.")
 parser.add_argument("--target", type=int, default=DEFAULT_TARGET,
                     help=f"target file size which each of the output files shall not exceed."+
-                    "defaults to {DEFAULT_TARGET} bytes (1.9 GB).")
+                    f" defaults to {DEFAULT_TARGET} bytes (1.9 GB).")
 
 class ProcessingError(RuntimeError):
     def __init__(self, msg):

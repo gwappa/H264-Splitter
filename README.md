@@ -26,7 +26,7 @@ $ pip install .
 
 ## Running
 
-Run `videosplitter --help` to see what arguments can be used.
+Run `splitvideo --help` to see what arguments can be used.
 
 ## License
 
