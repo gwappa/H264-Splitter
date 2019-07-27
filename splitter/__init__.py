@@ -31,8 +31,8 @@ import math as _math
 from traceback import print_exc as _print_exc
 from skvideo.io import FFmpegReader as _VReader, FFmpegWriter as _VWriter
 
-VERSION_STR="1.0alpha"
-DEFAULT_TARGET=2000000000
+VERSION_STR="1.0a1"
+DEFAULT_TARGET=5500000000
 
 parser = argparse.ArgumentParser(description='split a video file into smaller files.')
 parser.add_argument("input_files", nargs='+',
@@ -40,13 +40,17 @@ parser.add_argument("input_files", nargs='+',
 parser.add_argument("--target", type=int, default=DEFAULT_TARGET,
                     help=f"target file size which each of the output files shall not exceed."+
                     f" defaults to {DEFAULT_TARGET} bytes (1.9 GB).")
+parser.add_argument("--conservative", action='store_false', dest='force_conversion',
+                    help='if set, conversion of smaller files are suppressed.')
+parser.add_argument("-q", "--quiet", action='store_false', dest='verbose',
+                    help="suppress verbose outputs.")
 
 class ProcessingError(RuntimeError):
     def __init__(self, msg):
         super().__init__(msg)
 
 class FragmentWriter:
-    
+
     @classmethod
     def iterate(cls, number, basename="video", outputdir=_Path(), suffix='.mp4', verbose=True):
         index = 0
@@ -124,7 +128,16 @@ def estimate_frame_per_file(path, target, verbose=True):
         print(f"    number-of-files = {nfiles}", flush=True)
     return count, estimate, nfiles
 
-def process_file(path, target, verbose=True):
+def convert_file(path, nframes, suffix='.mp4', verbose=True):
+    outputpath = path.with_suffix(suffix)
+    with FragmentWriter(outputpath, verbose=verbose) as out:
+        for i, frame in enumerate(_VReader(str(path)).nextFrame()):
+            out.write(frame)
+            if i == nframes - 1:
+                break
+    print(f">>> converted to: {outputpath}")
+
+def process_file(path, target, verbose=True, force_conversion=True):
     path = _Path(path)
     if not path.is_file():
         raise ProcessingError(f"not a file: {path}")
@@ -138,7 +151,10 @@ def process_file(path, target, verbose=True):
     if per_file < 10:
         raise ProcessingError("target file size seems to be too small")
     elif per_file >= total_count:
-        raise ProcessingError(f"no need to split {path}")
+        if force_conversion == True:
+            return convert_file(path, nframes=total_count, verbose=verbose)
+        else:
+            raise ProcessingError(f"no need to split {path}")
 
     # split the video
     outputpath = path.with_suffix(".split")
@@ -167,12 +183,13 @@ def process_file(path, target, verbose=True):
     if verbose == True:
         print(f">>> split into {j+1} files.")
 
-def run(input_files=[], target=None, verbose=True):
+def run(input_files=[], target=None, force_conversion=True, verbose=True):
     if target is None:
         target = DEFAULT_TARGET
     for path in input_files:
         try:
-            process_file(path, target, verbose=verbose)
+            process_file(path, target, force_conversion=force_conversion,
+                         verbose=verbose)
         except ProcessingError as e:
             print(f"***{e}", file=_sys.stderr, flush=True)
             continue
@@ -180,5 +197,3 @@ def run(input_files=[], target=None, verbose=True):
             _print_exc()
             print(f"***failed to process: {path}", file=_sys.stderr, flush=True)
             continue
-
-
