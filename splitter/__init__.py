@@ -28,18 +28,31 @@ from pathlib import Path as _Path
 import sys as _sys
 import os as _os
 import math as _math
+from glob import glob as _glob
 from traceback import print_exc as _print_exc
 from skvideo.io import FFmpegReader as _VReader, FFmpegWriter as _VWriter
 
-VERSION_STR="1.0a1"
-DEFAULT_TARGET=5500000000
+VERSION_STR="1.0a2"
+DEFAULT_TARGET=6500000000
+
+def rough_size(siz):
+    units = ('bytes', 'kB', 'MB', 'GB')
+    for up, unit in enumerate(units):
+        if siz < 1500:
+            if isinstance(siz, int):
+                return f"{siz}{unit}"
+            else:
+                return f"{siz:.1f}{unit}"
+        else:
+            siz = siz / 1024
+    return f"{siz:.1f}TB"
 
 parser = argparse.ArgumentParser(description='split a video file into smaller files.')
 parser.add_argument("input_files", nargs='+',
                     help="can be any video files that ffmpeg accepts.")
 parser.add_argument("--target", type=int, default=DEFAULT_TARGET,
                     help=f"target file size which each of the output files shall not exceed."+
-                    f" defaults to {DEFAULT_TARGET} bytes (1.9 GB).")
+                    f" defaults to {DEFAULT_TARGET} bytes ({rough_size(DEFAULT_TARGET)}).")
 parser.add_argument("--conservative", action='store_false', dest='force_conversion',
                     help='if set, conversion of smaller files are suppressed.')
 parser.add_argument("-q", "--quiet", action='store_false', dest='verbose',
@@ -94,18 +107,6 @@ def get_frame_count(path):
         return int(ret.stdout.decode('utf-8').strip())
     else:
         raise RuntimeError(ret)
-
-def rough_size(siz):
-    units = ('bytes', 'kB', 'MB', 'GB')
-    for up, unit in enumerate(units):
-        if siz < 1500:
-            if isinstance(siz, int):
-                return f"{siz}{unit}"
-            else:
-                return f"{siz:.1f}{unit}"
-        else:
-            siz = siz / 1024
-    return f"{siz:.1f}TB"
 
 def estimate_frame_per_file(path, target, verbose=True):
     """returns (frame_count, number_of_frames_per_file) in a tuple."""
@@ -186,14 +187,15 @@ def process_file(path, target, verbose=True, force_conversion=True):
 def run(input_files=[], target=None, force_conversion=True, verbose=True):
     if target is None:
         target = DEFAULT_TARGET
-    for path in input_files:
-        try:
-            process_file(path, target, force_conversion=force_conversion,
-                         verbose=verbose)
-        except ProcessingError as e:
-            print(f"***{e}", file=_sys.stderr, flush=True)
-            continue
-        except:
-            _print_exc()
-            print(f"***failed to process: {path}", file=_sys.stderr, flush=True)
-            continue
+    for pathpat in input_files:
+        for path in _glob(pathpat):
+            try:
+                process_file(path, target, force_conversion=force_conversion,
+                             verbose=verbose)
+            except ProcessingError as e:
+                print(f"***{e}", file=_sys.stderr, flush=True)
+                continue
+            except:
+                _print_exc()
+                print(f"***failed to process: {path}", file=_sys.stderr, flush=True)
+                continue
